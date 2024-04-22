@@ -59,8 +59,8 @@ pulse_ms = 30
 # cv2.createTrackbar("HUE Max", "HSV", 32, 179, empty)
 # cv2.createTrackbar("SAT Max", "HSV", 255, 255, empty)
 # cv2.createTrackbar("VALUE Max", "HSV", 255, 255, empty)
-lower = np.array([4, 180, 156])     # 适用于橙色乒乓球4<=h<=32
-upper = np.array([32, 255, 255])
+lower = np.array([100, 43, 100])     # 适用于橙色乒乓球4<=h<=32
+upper = np.array([124, 255, 140])
 targetPos_x = 0     # 颜色检测得到的x坐标
 targetPos_y = 0     # 颜色检测得到的y坐标
 lastPos_x = 0       # 上一帧图像颜色检测得到的x坐标
@@ -100,34 +100,43 @@ while True:
 
     imgMask = cv2.inRange(imgHsv, lower, upper)     # 获取遮罩
     imgOutput = cv2.bitwise_and(img, img, mask=imgMask)
+    cv2.imshow("mask",imgOutput)
     contours, hierarchy = cv2.findContours(imgMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)   # 查找轮廓
-    # https://blog.csdn.net/laobai1015/article/details/76400725
     # CV_RETR_EXTERNAL 只检测最外围轮廓
     # CV_CHAIN_APPROX_NONE 保存物体边界上所有连续的轮廓点到contours向量内
+    # res=cv2.drawContours(img,contours,0,(0,0,255),2)
+    # cv2.imshow("res",res)
     imgMask = cv2.cvtColor(imgMask, cv2.COLOR_GRAY2BGR)     # 转换后，后期才能够与原画面拼接，否则与原图维数不同
-
     # 下面的代码查找包围框，并绘制
     x, y, w, h = 0, 0, 0, 0
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        # print(area)
-        if area > 300:
-            x, y, w, h = cv2.boundingRect(cnt)
-            lastPos_x = targetPos_x
-            lastPos_y = targetPos_y
-            targetPos_x = int(x+w/2)
-            targetPos_y = int(y+h/2)
-            cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            cv2.circle(img, (targetPos_x, targetPos_y), 2, (0, 255, 0), 4)
+    i,flag,tip=0,0,0
+    img1=imgHough.copy()
+    for cnt in contours:#找出最大的那个球体且只有一个
+       area = cv2.contourArea(cnt)
+       if area>800:#球的面积必须大于该值
+            if flag<area:
+                flag=area
+                img1=contours[i]#找出轮廓最大的两个球
+                tip=i
+       i+=1
+    # print(area)
+    if flag > 800:
+       x, y, w, h = cv2.boundingRect(contours[tip])
+       lastPos_x = targetPos_x
+       lastPos_y = targetPos_y
+       targetPos_x = int(x+w/2)
+       targetPos_y = int(y+h/2)
+    #cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+       radius=(w+h)/4
+       cv2.circle(img, (targetPos_x, targetPos_y), int(radius), (0, 255, 0), 4)
 
     # 坐标（图像内的）
     cv2.putText(img, "({:0<2d}, {:0<2d})".format(targetPos_x, targetPos_y), (20, 30),
                 cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 2)  # 文字
     draw_direction(img, lastPos_x, lastPos_y, targetPos_x, targetPos_y)
-
     # 霍夫圆检测Start
     Hough_circle(r_minus_b, imgHough)
-    cv2.imshow("R_Minus_B", r_minus_b)
+    #cv2.imshow("R_Minus_B", r_minus_b)
     cv2.putText(imgHough, "({:0<2d}, {:0<2d})".format(Hough_x, Hough_y), (20, 30),
                 cv2.FONT_HERSHEY_PLAIN, 1, (255, 100, 0), 2)
     # 霍夫圆检测End
