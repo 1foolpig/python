@@ -23,10 +23,12 @@ def Hough_circle(imgGray, canvas):
     global Hough_x, Hough_y
     img = cv2.medianBlur(imgGray, 3)
     img = cv2.GaussianBlur(img, (17, 19), 0)
-    # cv2.imshow("Blur", img)
+    kernel=np.ones((5,5),np.uint8)
+    open=cv2.morphologyEx(img,cv2.MORPH_CLOSE,kernel=kernel)
+    cv2.imshow("Blur", open)
     # cv2.waitKey(30)
-    circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 200,
-                               param1=20, param2=50, minRadius=30, maxRadius=70)
+    circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT_ALT, 1.5, 20,
+                               param1=120, param2=0.85, minRadius=50, maxRadius=250)
     try:
         # try语法保证在找到圆的前提下才进行绘制
         circles = np.uint16(np.around(circles))
@@ -43,6 +45,8 @@ def Hough_circle(imgGray, canvas):
             cv2.circle(canvas, (i[0], i[1]), 2, (0, 0, 255), 3)
             Hough_x = i[0]
             Hough_y = i[1]
+
+#函数结束
 frameWidth = 640
 frameHeight = 480
 cap = cv2.VideoCapture(0)  # 0对应笔记本自带摄像头
@@ -59,35 +63,24 @@ pulse_ms = 30
 # cv2.createTrackbar("HUE Max", "HSV", 32, 179, empty)
 # cv2.createTrackbar("SAT Max", "HSV", 255, 255, empty)
 # cv2.createTrackbar("VALUE Max", "HSV", 255, 255, empty)
-lower = np.array([100, 43, 100])     # 适用于橙色乒乓球4<=h<=32
+lower = np.array([100, 43, 90])     # 适用于橙色乒乓球4<=h<=32
 upper = np.array([124, 255, 140])
-targetPos_x = 0     # 颜色检测得到的x坐标
-targetPos_y = 0     # 颜色检测得到的y坐标
-lastPos_x = 0       # 上一帧图像颜色检测得到的x坐标
-lastPos_y = 0       # 上一帧图像颜色检测得到的x坐标
-Hough_x = 0         # 霍夫圆检测得到的x坐标
-Hough_y = 0         # 霍夫圆检测得到的y坐标
+Hough_x = 0  # 霍夫圆检测得到的x坐标
+Hough_y = 0  # 霍夫圆检测得到的y坐标
 # ColorXs = []        # 这些是用来存储x，y坐标的列表，便于后期写入文件
 # ColorYs = []
 # HoughXs = []
 # HoughYs = []
-
-while True:
-    _, img = cap.read()
-
-    # 霍夫圆检测前的处理Start
-    b, g, r = cv2.split(img)    # 分离三个颜色
-    r = np.int16(r)             # 将红色与蓝色转换为int16，为了后期做差
-    b = np.int16(b)
-    r_minus_b = r - b           # 红色通道减去蓝色通道，得到r_minus_b
-    r_minus_b = (r_minus_b + abs(r_minus_b)) / 2    # r_minus_b中小于0的全部转换为0
-    r_minus_b = np.uint8(r_minus_b)                 # 将数据类型转换回uint8
+def Hsv_classify(img):
+    targetPos_x = 0  # 颜色检测得到的x坐标
+    targetPos_y = 0  # 颜色检测得到的y坐标
+    lastPos_x = 0  # 上一帧图像颜色检测得到的x坐标
+    lastPos_y = 0  # 上一帧图像颜色检测得到的x坐标
+    imgray = img.copy()
+    imgray = cv2.cvtColor(imgray, cv2.COLOR_BGR2GRAY)
     # 霍夫圆检测前的处理End
-
-    imgHough = img.copy()   # 用于绘制识别结果和输出
-
+    imgHough = img.copy()  # 用于绘制识别结果和输出
     imgHsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
     # h_min = cv2.getTrackbarPos("HUE Min", "HSV")
     # h_max = cv2.getTrackbarPos("HUE Max", "HSV")
     # s_min = cv2.getTrackbarPos("SAT Min", "HSV")
@@ -97,56 +90,68 @@ while True:
     #
     # lower = np.array([h_min, s_min, v_min])
     # upper = np.array([h_max, s_max, v_max])
-
-    imgMask = cv2.inRange(imgHsv, lower, upper)     # 获取遮罩
-    imgOutput = cv2.bitwise_and(img, img, mask=imgMask)
-    cv2.imshow("mask",imgOutput)
-    contours, hierarchy = cv2.findContours(imgMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)   # 查找轮廓
+    imgMask = cv2.inRange(imgHsv, lower, upper)  # 获取遮罩
+    #imgOutput = cv2.bitwise_and(img, img, mask=imgMask)
+    # cv2.imshow("mask",imgOutput)
+    contours, hierarchy = cv2.findContours(imgMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)  # 查找轮廓
     # CV_RETR_EXTERNAL 只检测最外围轮廓
     # CV_CHAIN_APPROX_NONE 保存物体边界上所有连续的轮廓点到contours向量内
-    # res=cv2.drawContours(img,contours,0,(0,0,255),2)
-    # cv2.imshow("res",res)
-    imgMask = cv2.cvtColor(imgMask, cv2.COLOR_GRAY2BGR)     # 转换后，后期才能够与原画面拼接，否则与原图维数不同
+    #imgMask = cv2.cvtColor(imgMask, cv2.COLOR_GRAY2BGR)  # 将掩膜从灰度图转为RGB图转换后，后期才能够与原画面拼接，否则与原图维数不同
+    # cv2.imshow("imgmask",imgMask)
     # 下面的代码查找包围框，并绘制
-    x, y, w, h = 0, 0, 0, 0
-    i,flag,tip=0,0,0
-    img1=imgHough.copy()
-    for cnt in contours:#找出最大的那个球体且只有一个
-       area = cv2.contourArea(cnt)
-       if area>800:#球的面积必须大于该值
-            if flag<area:
-                flag=area
-                img1=contours[i]#找出轮廓最大的两个球
-                tip=i
-       i+=1
+    i, flag, tip = 0, 0, 0
+    #img1 = imgHough.copy()
+    for cnt in contours:  # 找出最大的那个球体且只有一个
+        area = cv2.contourArea(cnt)
+        if area > 1000:  # 球的面积必须大于该值
+            if flag < area:
+                flag = area
+                img1 = contours[i]  # 找出轮廓最大的球
+                tip = i
+        i += 1
     # print(area)
-    if flag > 800:
-       x, y, w, h = cv2.boundingRect(contours[tip])
-       lastPos_x = targetPos_x
-       lastPos_y = targetPos_y
-       targetPos_x = int(x+w/2)
-       targetPos_y = int(y+h/2)
-    #cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
-       radius=(w+h)/4
-       cv2.circle(img, (targetPos_x, targetPos_y), int(radius), (0, 255, 0), 4)
+    if flag > 1000:
+        x, y, w, h = cv2.boundingRect(contours[tip])
+        lastPos_x = targetPos_x
+        lastPos_y = targetPos_y
+        targetPos_x = int(x + w / 2)
+        targetPos_y = int(y + h / 2)
+        # cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        radius = (w + h) / 4
+        cv2.circle(img, (targetPos_x, targetPos_y), int(radius), (0, 255, 0), 4)
 
     # 坐标（图像内的）
     cv2.putText(img, "({:0<2d}, {:0<2d})".format(targetPos_x, targetPos_y), (20, 30),
                 cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 2)  # 文字
     draw_direction(img, lastPos_x, lastPos_y, targetPos_x, targetPos_y)
-    # 霍夫圆检测Start
-    Hough_circle(r_minus_b, imgHough)
-    #cv2.imshow("R_Minus_B", r_minus_b)
-    cv2.putText(imgHough, "({:0<2d}, {:0<2d})".format(Hough_x, Hough_y), (20, 30),
-                cv2.FONT_HERSHEY_PLAIN, 1, (255, 100, 0), 2)
-    # 霍夫圆检测End
+    cv2.imshow("img",img)
+while True:
+    _, img = cap.read()
+    Hsv_classify(img)
+    # 霍夫圆检测前的处理Start
+    # b, g, r = cv2.split(img)    # 分离三个颜色
+    # r = np.int16(r)             # 将红色与蓝色转换为int16，为了后期做差
+    # b = np.int16(b)
+    # r_minus_b = r - b           # 红色通道减去蓝色通道，得到r_minus_b
+    # r_minus_b = (r_minus_b + abs(r_minus_b)) / 2    # r_minus_b中小于0的全部转换为0
+    # r_minus_b = np.uint8(r_minus_b)                 # 将数据类型转换回uint8
 
-    imgStack = np.hstack([img, imgHough])
+    # 霍夫圆检测Start  鉴定为检测不到，复杂环境纯纯不行
+
+    #imgMask = cv2.cvtColor(imgMask, cv2.COLOR_BGR2GRAY)
+    #cv2.imshow("imgray",imgMask)
+    #Hough_circle(imgMask, imgHough)
+
+    #cv2.imshow("R_Minus_B", r_minus_b)
+    #cv2.putText(imgHough, "({:0<2d}, {:0<2d})".format(Hough_x, Hough_y), (20, 30),
+                #cv2.FONT_HERSHEY_PLAIN, 1, (255, 100, 0), 2)
+    # 霍夫圆检测End
+    #imgStack = np.hstack([img, imgHough])
     # imgStack = np.hstack([img, imgMask])            # 拼接
-    cv2.imshow('Horizontal Stacking', imgStack)     # 显示
+    #cv2.imshow('Horizontal Stacking', imgStack)     # 显示
 
     # ColorXs.append(targetPos_x)     # 坐标存入列表
-    # ColorYs.append(targetPos_y)
+    # ColorYs.append(targetPos_y)4
     # HoughXs.append(Hough_x)
     # HoughYs.append(Hough_y)
 
@@ -154,7 +159,7 @@ while True:
         print("Quit\n")
         break
 
-filename = 'xy.txt'     # 坐标存入文件
+#filename = 'xy.txt'     # 坐标存入文件
 
 # with open(filename, 'w') as file_object:
 #     file_object.write("Color:\n")
